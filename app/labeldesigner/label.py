@@ -1,13 +1,15 @@
 from enum import Enum, auto
 from qrcode import QRCode, constants
 from PIL import Image, ImageDraw, ImageFont
-
+import textwrap
 
 class LabelContent(Enum):
     TEXT_ONLY = auto()
     QRCODE_ONLY = auto()
     TEXT_QRCODE = auto()
     IMAGE = auto()
+    PARTSBOX_PART = auto()
+    PARTSBOX_STORAGE = auto()
 
 
 class LabelOrientation(Enum):
@@ -41,6 +43,7 @@ class SimpleLabel:
             height=0,
             label_content=LabelContent.TEXT_ONLY,
             label_orientation=LabelOrientation.STANDARD,
+            label_company='',
             label_type=LabelType.ENDLESS_LABEL,
             label_margin=(0, 0, 0, 0),  # Left, Right, Top, Bottom
             fore_color=(0, 0, 0),  # Red, Green, Blue
@@ -56,6 +59,7 @@ class SimpleLabel:
         self._height = height
         self.label_content = label_content
         self.label_orientation = label_orientation
+        self.label_company = label_company
         self.label_type = label_type
         self._label_margin = label_margin
         self._fore_color = fore_color
@@ -111,74 +115,346 @@ class SimpleLabel:
     def label_type(self, value):
         self._label_type = value
 
-    def generate(self):
-        if self._label_content in (LabelContent.QRCODE_ONLY, LabelContent.TEXT_QRCODE):
-            img = self._generate_qr()
-        elif self._label_content == LabelContent.IMAGE:
-            img = self._image
-        else:
-            img = None
+    
+    def get_font_size(self, text, font, max_width=None, max_height=None):
+        if max_width is None and max_height is None:
+            raise ValueError('You need to pass max_width or max_height')
+        font_size = 1
+        text_size = self.get_text_size(font, font_size, text)
+        if (max_width is not None and text_size[0] > max_width) or \
+            (max_height is not None and text_size[1] > max_height):
+            raise ValueError("Text can't be filled in only (%dpx, %dpx)" % \
+                    text_size)
+        while True:
+            if (max_width is not None and text_size[0] >= max_width) or \
+                (max_height is not None and text_size[1] >= max_height):
+                return font_size - 1
+            font_size += 1
+            text_size = self.get_text_size(font, font_size, text)
 
-        if img is not None:
-            img_width, img_height = img.size
-        else:
-            img_width, img_height = (0, 0)
+    def write_text(self, img, xy, text, font_filename, font_size=11,
+                    color=(0, 0, 0), max_width=None, max_height=None):
+        x, y = xy
+        if font_size == 'fill' and \
+            (max_width is not None or max_height is not None):
+            font_size = self.get_font_size(text, font_filename, max_width,
+                                            max_height)
+        text_size = self.get_text_size(font_filename, font_size, text)
+        font = ImageFont.truetype(font_filename, font_size)
+        if x == 'center':
+            x = (self.size[0] - text_size[0]) / 2
+        if y == 'center':
+            y = (self.size[1] - text_size[1]) / 2
+        ImageDraw.Draw(img).text((x, y), text, font=font, fill=color)
+        return text_size
 
-        if self._label_content in (LabelContent.TEXT_ONLY, LabelContent.TEXT_QRCODE):
-            textsize = self._get_text_size()
-        else:
-            textsize = (0, 0)
+    def draw_line(self, img, coordinates):
+        ImageDraw.Draw(img).line(coordinates, fill="black")
 
+    def get_text_size(self, font_filename, font_size, text):
+        font = ImageFont.truetype(font_filename, font_size)
+        return font.getsize(text)
+
+    def write_text_box(self, img, xy, text, box_width, font_filename,
+                        font_size=11, color=(0, 0, 0), place='left',
+                        justify_last_line=False, position='top',
+                        line_spacing=1.0, box_height=None):
+        x, y = xy
+
+        while box_height is not None:
+            # This splits text and creates a multi-lin
+            lines = []
+            line = []
+            words = text.split()
+            for word in words:
+                new_line = ' '.join(line + [word])
+                size = self.get_text_size(font_filename, font_size, new_line)
+                text_height = size[1] * line_spacing
+                last_line_bleed = text_height - size[1]
+                if size[0] <= box_width:
+                    line.append(word)
+                else:
+                    lines.append(line)
+                    line = [word]
+            if line:
+                lines.append(line)
+            lines = [' '.join(line) for line in lines if line]
+            
+            if position == 'middle':
+                height = (self.size[1] - len(lines)*text_height + last_line_bleed)/2
+                height -= text_height # the loop below will fix this height
+            elif position == 'bottom':
+                height = self.size[1] - len(lines)*text_height + last_line_bleed
+                height -= text_height  # the loop below will fix this height
+            else:
+                height = y
+                
+            for index, line in enumerate(lines):
+                if place == 'left':
+                    pass
+                elif place == 'right':
+                    total_size = self.get_text_size(font_filename, font_size, line)
+                    x_left = x + box_width - total_size[0]
+                elif place == 'center':
+                    total_size = self.get_text_size(font_filename, font_size, line)
+                    x_left = int(x + ((box_width - total_size[0]) / 2))
+                elif place == 'justify':
+                    words = line.split()
+                    if (index == len(lines) - 1 and not justify_last_line) or \
+                    len(words) == 1:
+                        continue
+                    line_without_spaces = ''.join(words)
+                    total_size = self.get_text_size(font_filename, font_size,
+                                                    line_without_spaces)
+                    space_width = (box_width - total_size[0]) / (len(words) - 1.0)
+                    start_x = x
+                    for word in words[:-1]:
+                        word_size = self.get_text_size(font_filename, font_size,
+                                                        word)
+                        start_x += word_size[0] + space_width
+                    last_word_size = self.get_text_size(font_filename, font_size,
+                                                        words[-1])
+                    last_word_x = x + box_width - last_word_size[0]
+                height += text_height
+
+            if height - y < box_height:
+                box_height=None
+                break
+            else:
+                font_size-=1
+
+        # This splits text and creates a multi-lin
+        lines = []
+        line = []
+        words = text.split()
+        for word in words:
+            new_line = ' '.join(line + [word])
+            size = self.get_text_size(font_filename, font_size, new_line)
+            text_height = size[1] * line_spacing
+            last_line_bleed = text_height - size[1]
+            if size[0] <= box_width:
+                line.append(word)
+            else:
+                lines.append(line)
+                line = [word]
+        if line:
+            lines.append(line)
+        lines = [' '.join(line) for line in lines if line]
+        
+        if position == 'middle':
+            height = (self.size[1] - len(lines)*text_height + last_line_bleed)/2
+            height -= text_height # the loop below will fix this height
+        elif position == 'bottom':
+            height = self.size[1] - len(lines)*text_height + last_line_bleed
+            height -= text_height  # the loop below will fix this height
+        else:
+            height = y
+
+        for index, line in enumerate(lines):
+            if place == 'left':
+                self.write_text(img,(x, height), line, font_filename, font_size,
+                                color)
+            elif place == 'right':
+                total_size = self.get_text_size(font_filename, font_size, line)
+                x_left = x + box_width - total_size[0]
+                self.write_text(img,(x_left, height), line, font_filename,
+                                font_size, color)
+            elif place == 'center':
+                total_size = self.get_text_size(font_filename, font_size, line)
+                x_left = int(x + ((box_width - total_size[0]) / 2))
+                self.write_text(img,(x_left, height), line, font_filename,
+                                font_size, color)
+            elif place == 'justify':
+                words = line.split()
+                if (index == len(lines) - 1 and not justify_last_line) or \
+                len(words) == 1:
+                    self.write_text(img,(x, height), line, font_filename, font_size,
+                                    color)
+                    continue
+                line_without_spaces = ''.join(words)
+                total_size = self.get_text_size(font_filename, font_size,
+                                                line_without_spaces)
+                space_width = (box_width - total_size[0]) / (len(words) - 1.0)
+                start_x = x
+                for word in words[:-1]:
+                    self.write_text(img,(start_x, height), word, font_filename,
+                                    font_size, color)
+                    word_size = self.get_text_size(font_filename, font_size,
+                                                    word)
+                    start_x += word_size[0] + space_width
+                last_word_size = self.get_text_size(font_filename, font_size,
+                                                    words[-1])
+                last_word_x = x + box_width - last_word_size[0]
+                self.write_text(img,(last_word_x, height), words[-1], font_filename,
+                                font_size, color)
+            height += text_height
+
+        return (box_width, height - y)
+
+    def _generate_partsbox(self,img):
+        self._text
+
+        partsbox_fields = {}
+        # Default values
+        partsbox_fields["mpn"]="Placeholder MPN"
+        partsbox_fields["desc"]="Placeholder decription of placeholder component on placeholder location"
+        partsbox_fields["location"]="Placeholder LOCATION"
+        partsbox_fields["url"]="https://PARTSBOX.COM/nonenoenoenoenoenoenoenoene"
+
+        if self._text is not ' ':
+            lines=self._text.splitlines()
+            try:
+                partsbox_fields["mpn"]=lines[0]
+            except:
+                print("Fail")
+            
+            try:
+                partsbox_fields["desc"]=lines[1]
+            except:
+                print("Fail")
+
+            try:
+                partsbox_fields["location"]=lines[2]
+            except:
+                print("Fail")
+
+            try:
+                partsbox_fields["url"]=lines[3]
+            except:
+                print("Fail")
+
+        color = "black"
+        font=self._font_path
+        #font = 'Pillow/Tests/fonts/FreeSans.ttf'
         width, height = self._width, self._height
-        margin_left, margin_right, margin_top, margin_bottom = self._label_margin
 
-        if self._label_orientation == LabelOrientation.STANDARD:
-            if self._label_type in (LabelType.ENDLESS_LABEL,):
-                height = img_height + textsize[1] + margin_top + margin_bottom
-        elif self._label_orientation == LabelOrientation.ROTATED:
-            if self._label_type in (LabelType.ENDLESS_LABEL,):
-                width = img_width + textsize[0] + margin_left + margin_right
+        print("width {} height{} ".format(width,height))
 
-        if self._label_orientation == LabelOrientation.STANDARD:
-            if self._label_type in (LabelType.DIE_CUT_LABEL, LabelType.ROUND_DIE_CUT_LABEL):
-                vertical_offset_text = (height - img_height - textsize[1])//2
+        # top row height as percentage of total
+        margin=20
+        top_row_height=int(height*0.25)-margin
+        mid_row_offset=int(height*0.3)+margin
+        mid_row_height=int(height*0.6)-margin
+        bottom_row_offset=int(height*0.8)+margin
+        bottom_row_height=int(height*0.2)-margin
+
+        # Manufacturere part number
+        text_mpn=partsbox_fields["mpn"]
+        text_mpn=textwrap.shorten(text_mpn, width=40, placeholder="...")
+        self.write_text(img,(margin, margin), text_mpn, font_filename=font, font_size='fill', max_width=width, max_height=top_row_height, color=color)
+
+        self.draw_line(img,(margin,mid_row_offset-margin,int(width*0.7),mid_row_offset-margin))
+
+        # Part description - multi line box, autofit
+        text=partsbox_fields["desc"]
+        self.write_text_box(img,(margin, mid_row_offset), text, box_width=int(width-height*0.8), box_height=mid_row_height-10, font_filename=font, font_size=30, color=color, place='left')
+
+        self.draw_line(img,(margin,bottom_row_offset-margin,int(width*0.7),bottom_row_offset-margin))
+
+        # Storage location
+        text=partsbox_fields["location"]
+        text=textwrap.shorten(text, width=50, placeholder="...")
+        self.write_text(img,(margin, bottom_row_offset), text, font_filename=font, font_size='fill', max_width=int(width-height*0.8), max_height=bottom_row_height, color=color)
+
+        text="irnas.eu"#self.label_company
+        text=textwrap.shorten(text, width=50, placeholder="...")
+        #self.write_text_box(img,(int(width*0.7), bottom_row_offset+bottom_row_height/4), text, box_width=int(width*0.3), box_height=bottom_row_height/2, font_filename=font, font_size=10, color=color, place='center')
+        self.write_text(img,(int(width*0.8), int(bottom_row_offset+bottom_row_height/4)), text, font_filename=font, font_size='fill', max_width=int(width-height*0.8), max_height=bottom_row_height/2, color=color)
+
+        # QR code
+        qr = QRCode(
+            version=1,
+            error_correction=constants.ERROR_CORRECT_L,
+            box_size=5,
+            border=0,
+        )
+        qr.add_data(partsbox_fields["url"].lower())
+        qr.make(fit=True)
+        qr_img = qr.make_image(
+            fill_color='red' if (255, 0, 0) == self._fore_color else 'black',
+            back_color="white")
+
+        w, h = qr_img.size
+        img.paste(qr_img,(width-w-20,int(height-h-bottom_row_height)))
+
+        return img
+
+    def generate(self):
+
+        if self._label_content in (LabelContent.PARTSBOX_STORAGE, LabelContent.PARTSBOX_PART):
+            width, height = (696, int(696*0.4))
+            self._width, self._height = width, height 
+
+            imgResult = Image.new('RGB', (width, height), 'white')
+            self._generate_partsbox(imgResult)
+
+        else:
+            if self._label_content in (LabelContent.QRCODE_ONLY, LabelContent.TEXT_QRCODE):
+                img = self._generate_qr()
+            elif self._label_content == LabelContent.IMAGE:
+                img = self._image
+            else:
+                img = None
+
+            if img is not None:
+                img_width, img_height = img.size
+            else:
+                img_width, img_height = (0, 0)
+
+            if self._label_content in (LabelContent.TEXT_ONLY, LabelContent.TEXT_QRCODE):
+                textsize = self._get_text_size()
+            else:
+                textsize = (0, 0)
+
+            width, height = self._width, self._height
+            margin_left, margin_right, margin_top, margin_bottom = self._label_margin
+
+            if self._label_orientation == LabelOrientation.STANDARD:
+                if self._label_type in (LabelType.ENDLESS_LABEL,):
+                    height = img_height + textsize[1] + margin_top + margin_bottom
+            elif self._label_orientation == LabelOrientation.ROTATED:
+                if self._label_type in (LabelType.ENDLESS_LABEL,):
+                    width = img_width + textsize[0] + margin_left + margin_right
+
+            if self._label_orientation == LabelOrientation.STANDARD:
+                if self._label_type in (LabelType.DIE_CUT_LABEL, LabelType.ROUND_DIE_CUT_LABEL):
+                    vertical_offset_text = (height - img_height - textsize[1])//2
+                    vertical_offset_text += (margin_top - margin_bottom)//2
+                else:
+                    vertical_offset_text = margin_top
+
+                vertical_offset_text += img_height
+                horizontal_offset_text = max((width - textsize[0])//2, 0)
+                horizontal_offset_image = (width - img_width)//2
+                vertical_offset_image = margin_top
+
+            elif self._label_orientation == LabelOrientation.ROTATED:
+                vertical_offset_text = (height - textsize[1])//2
                 vertical_offset_text += (margin_top - margin_bottom)//2
-            else:
-                vertical_offset_text = margin_top
+                if self._label_type in (LabelType.DIE_CUT_LABEL, LabelType.ROUND_DIE_CUT_LABEL):
+                    horizontal_offset_text = max((width - img_width - textsize[0])//2, 0)
+                else:
+                    horizontal_offset_text = margin_left
+                horizontal_offset_text += img_width
+                horizontal_offset_image = margin_left
+                vertical_offset_image = (height - img_height)//2
 
-            vertical_offset_text += img_height
-            horizontal_offset_text = max((width - textsize[0])//2, 0)
-            horizontal_offset_image = (width - img_width)//2
-            vertical_offset_image = margin_top
+            text_offset = horizontal_offset_text, vertical_offset_text
+            image_offset = horizontal_offset_image, vertical_offset_image
 
-        elif self._label_orientation == LabelOrientation.ROTATED:
-            vertical_offset_text = (height - textsize[1])//2
-            vertical_offset_text += (margin_top - margin_bottom)//2
-            if self._label_type in (LabelType.DIE_CUT_LABEL, LabelType.ROUND_DIE_CUT_LABEL):
-                horizontal_offset_text = max((width - img_width - textsize[0])//2, 0)
-            else:
-                horizontal_offset_text = margin_left
-            horizontal_offset_text += img_width
-            horizontal_offset_image = margin_left
-            vertical_offset_image = (height - img_height)//2
+            imgResult = Image.new('RGB', (width, height), 'white')
+            if img is not None:
+                imgResult.paste(img, image_offset)
 
-        text_offset = horizontal_offset_text, vertical_offset_text
-        image_offset = horizontal_offset_image, vertical_offset_image
-
-        imgResult = Image.new('RGB', (width, height), 'white')
-
-        if img is not None:
-            imgResult.paste(img, image_offset)
-
-        if self._label_content in (LabelContent.TEXT_ONLY, LabelContent.TEXT_QRCODE):
-            draw = ImageDraw.Draw(imgResult)
-            draw.multiline_text(
-                text_offset,
-                self._prepare_text(self._text),
-                self._fore_color,
-                font=self._get_font(),
-                align=self._text_align,
-                spacing=int(self._font_size*((self._line_spacing - 100) / 100)))
+            if self._label_content in (LabelContent.TEXT_ONLY, LabelContent.TEXT_QRCODE):
+                draw = ImageDraw.Draw(imgResult)
+                draw.multiline_text(
+                    text_offset,
+                    self._prepare_text(self._text),
+                    self._fore_color,
+                    font=self._get_font(),
+                    align=self._text_align,
+                    spacing=int(self._font_size*((self._line_spacing - 100) / 100)))
 
         return imgResult
 

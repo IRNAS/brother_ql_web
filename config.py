@@ -16,14 +16,15 @@ class Config(object):
     SERVER_HOST = '0.0.0.0'
 
     PRINTER_MODEL = 'QL-500'
-    PRINTER_PRINTER = 'file:///dev/usb/lp1'
+    PRINTER_PRINTER = 'file:///dev/usb/lp0'
 
     LABEL_DEFAULT_ORIENTATION = 'standard'
     LABEL_DEFAULT_SIZE = '62'
     LABEL_DEFAULT_FONT_SIZE = 70
     LABEL_DEFAULT_QR_SIZE = 10
     LABEL_DEFAULT_LINE_SPACING = 100
-    LABEL_DEFAULT_FONT_FAMILY = 'DejaVu Serif'
-    LABEL_DEFAULT_FONT_STYLE = 'Book'
+    LABEL_DEFAULT_FONT_FAMILY = 'Liberation Sans'
+    LABEL_DEFAULT_FONT_STYLE = 'Regular'
+    LABEL_DEFAULT_COMPANY = 'irnas.eu'
 
     FONT_FOLDER = ''

@@ -31,8 +31,9 @@ def index():
                            font_family_names=FONTS.fontlist(),
                            label_sizes=LABEL_SIZES,
                            default_label_size=current_app.config['LABEL_DEFAULT_SIZE'],
-                           default_font_size=current_app.config['LABEL_DEFAULT_SIZE'],
+                           default_font_size=current_app.config['LABEL_DEFAULT_FONT_SIZE'],
                            default_orientation=current_app.config['LABEL_DEFAULT_ORIENTATION'],
+                           default_company=current_app.config['LABEL_DEFAULT_COMPANY'],
                            default_qr_size=current_app.config['LABEL_DEFAULT_QR_SIZE'],
                            default_font_family=current_app.config['LABEL_DEFAULT_FONT_FAMILY'],
                            line_spacings=LINE_SPACINGS,
@@ -146,7 +147,7 @@ def create_label_from_request(request):
 
     def get_font_path(font_family_name, font_style_name):
         try:
-            if font_family_name is None or font_style_name is None:
+            if font_family_name is None or font_style_name is None or font_style_name is "":
                 font_family_name = current_app.config['LABEL_DEFAULT_FONT_FAMILY']
                 font_style_name = current_app.config['LABEL_DEFAULT_FONT_STYLE']
             font_path = FONTS.fonts[font_family_name][font_style_name]
@@ -174,6 +175,10 @@ def create_label_from_request(request):
         label_content = LabelContent.QRCODE_ONLY
     elif context['print_type'] == 'qrcode_text':
         label_content = LabelContent.TEXT_QRCODE
+    elif context['print_type'] == 'partsbox_part':
+        label_content = LabelContent.PARTSBOX_PART
+    elif context['print_type'] == 'partsbox_storage':
+        label_content = LabelContent.PARTSBOX_STORAGE
     else:
         label_content = LabelContent.IMAGE
 

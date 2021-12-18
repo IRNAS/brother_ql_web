@@ -1,27 +1,21 @@
-## brother\_ql\_web
+## brother\_ql\_web\partsbox
 
-This is a web service to print labels on Brother QL label printers.
+This is a web service to print labels in particula to use with [PartsBox](http://partsbox.com) Service on on Brother QL label printers. N0te: Higly experimental implementation presently with proof-of-code implementation - needs rework to support and validate most edge-cases.
 
 You need Python 3 for this software to work.
 
 ![Screenshot](./screenshots/Label-Designer_Desktop.png)
 
 The web interface is [responsive](https://en.wikipedia.org/wiki/Responsive_web_design).
-There's also a screenshot showing [how it looks on a smartphone](./screenshots/Label-Designer_Phone.png)
 
-### Additional Features
-* Print text as QR Code
-    * Add text to QR Code
-    * Change size of QR Code
-* Upload files to print
-    * .pdf, .png and .jpg files
-    * automatically convertion to black/white image
-* Change print color for black/white/red labels
-* Print lables multiple times
-    * Cut every label
-    * Cut only after the last label
-* Migrated GUI to Bootstrap 4
-* Make preview for round labels.. round
+### PartsBox features
+PartsBox is a web service for tracking components and as such it is useful to print labels that attach to physical objects. As no API is available presently, the label printing only has a built it format which uses copy-paste data to the label text.
+
+Parts tab uses the label text field as a 4 line entry where the lines get used as follows:
+1. Manufacturer part number (large on top)
+1. Part description (multi line in middle
+1. Storage location (bottom)
+1. PartsBox URL (QR code)
 
 ### Installation
 
@@ -33,7 +27,7 @@ Install prerequisites:
 Get the code:
 
     cd /opt
-    git clone https://github.com/tbnobody/brother_ql_web.git
+    git clone https://github.com/IRNAS/brother_ql_web.git
 
 Build the venv and install the requirements:
 
@@ -91,3 +85,6 @@ Parts of this package are redistributed software products from 3rd parties. They
 * [Bootstrap](https://github.com/twbs/bootstrap), MIT License
 * [Font Awesome](https://github.com/FortAwesome/Font-Awesome), CC BY 4.0 License
 * [jQuery](https://github.com/jquery/jquery), MIT License
+
+### Credits
+This repository is a fork of https://github.com/tbnobody/brother_ql_web and has merged useful components and concepts from https://gist.github.com/pojda/8bf989a0556845aaf4662cd34f21d269  Awesome work without which this would not be possible.
