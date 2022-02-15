@@ -35,6 +35,27 @@ Build the venv and install the requirements:
     python3 -m venv .venv
     source /opt/brother_ql_web/.venv/bin/activate
     pip install -r requirements.txt
+    
+### Disabling printer auto-off
+
+Create file: /etc/udev/rules.d/99-brotherql.rules
+
+    ACTION=="add", SUBSYSTEMS=="usb", KERNEL=="lp0", RUN+="/usr/bin/disable_poweroff.sh /dev/usb/lp0"
+
+Custom disable power-off script /usr/bin/disable_poweroff.sh
+
+    #!/bin/bash
+    echo -n -e '\x1b\x69\x55\x41\x00\x00' > $1
+
+Make it executable
+
+    chmod +x /usr/bin/disable_poweroff.sh
+
+Reload the rules
+
+    udevadm control --reload-rules && udevadm trigger
+
+Based on https://github.com/pklaus/brother_ql/issues/50#issuecomment-664457486
 
 ### Configuration file
 
