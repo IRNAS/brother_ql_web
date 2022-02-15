@@ -15,8 +15,9 @@ class Config(object):
     SERVER_PORT = 8013
     SERVER_HOST = '0.0.0.0'
 
-    PRINTER_MODEL = 'QL-500'
-    PRINTER_PRINTER = 'file:///dev/usb/lp0'
+    PRINTER_MODEL = 'QL-570'
+    PRINTER_PRINTER = 'file:///dev/usb/lp3'
+    PARTSBOX_API_KEY = ''
 
     LABEL_DEFAULT_ORIENTATION = 'standard'
     LABEL_DEFAULT_SIZE = '62'
