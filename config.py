@@ -17,7 +17,6 @@ class Config(object):
 
     PRINTER_MODEL = 'QL-570'
     PRINTER_PRINTER = 'file:///dev/usb/lp3'
-    PARTSBOX_API_KEY = ''
 
     LABEL_DEFAULT_ORIENTATION = 'standard'
     LABEL_DEFAULT_SIZE = '62'
@@ -26,6 +25,5 @@ class Config(object):
     LABEL_DEFAULT_LINE_SPACING = 100
     LABEL_DEFAULT_FONT_FAMILY = 'Liberation Sans'
     LABEL_DEFAULT_FONT_STYLE = 'Regular'
-    LABEL_DEFAULT_COMPANY = 'irnas.eu'
 
     FONT_FOLDER = ''

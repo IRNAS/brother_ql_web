@@ -33,7 +33,6 @@ def index():
                            default_label_size=current_app.config['LABEL_DEFAULT_SIZE'],
                            default_font_size=current_app.config['LABEL_DEFAULT_FONT_SIZE'],
                            default_orientation=current_app.config['LABEL_DEFAULT_ORIENTATION'],
-                           default_company=current_app.config['LABEL_DEFAULT_COMPANY'],
                            default_qr_size=current_app.config['LABEL_DEFAULT_QR_SIZE'],
                            default_font_family=current_app.config['LABEL_DEFAULT_FONT_FAMILY'],
                            line_spacings=LINE_SPACINGS,

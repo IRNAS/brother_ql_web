@@ -1,0 +1,4 @@
+PARTSBOX_USER_URL: "https://partsbox.com/<username>"
+PARTSBOX_API_URL: "https://api.partsbox.com/api/1"
+PARTSBOX_API_KEY: '<apikey>'
+PARTSBOX_COMPANY: "<company>"

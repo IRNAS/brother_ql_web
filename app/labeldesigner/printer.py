@@ -47,6 +47,7 @@ class PrinterQueue:
     def add_label_to_queue(self, label, count, cut_once=False):
         for cnt in range(0, count):
             cut = (cut_once == False) or (cut_once and cnt == count-1)
+            cut = True
 
             self._printQueue.append(
                 {'label': label,

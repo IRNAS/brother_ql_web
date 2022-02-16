@@ -2,6 +2,9 @@ from enum import Enum, auto
 from qrcode import QRCode, constants
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
+import requests
+import json
+import yaml
 
 class LabelContent(Enum):
     TEXT_ONLY = auto()
@@ -54,7 +57,10 @@ class SimpleLabel:
             image=None,
             font_path='',
             font_size=70,
-            line_spacing=100):
+            line_spacing=100,
+            partsbox_user_url='',
+            partsbox_api_url='',
+            partsbox_api_key=''):
         self._width = width
         self._height = height
         self.label_content = label_content
@@ -71,6 +77,9 @@ class SimpleLabel:
         self._font_path = font_path
         self._font_size = font_size
         self._line_spacing = line_spacing
+        self.partsbox_user_url = partsbox_user_url
+        self.partsbox_api_url = partsbox_api_url
+        self.partsbox_api_key = partsbox_api_key
 
     @property
     def label_content(self):
@@ -291,8 +300,53 @@ class SimpleLabel:
 
         return (box_width, height - y)
 
-    def _generate_partsbox(self,img):
+    def _get_partsbox_data(self, config, part_id):
+
+        PARTSBOX_USER_URL = config["PARTSBOX_USER_URL"]
+        PARTSBOX_API_URL = config["PARTSBOX_API_URL"]
+        PARTSBOX_API_KEY = config["PARTSBOX_API_KEY"]
+
+        headers = {"Authorization": "APIKey "+PARTSBOX_API_KEY,"Content-Type": "application/json; charset=utf-8"}
+        data = {"part/id": part_id}
+
+        response = requests.post(PARTSBOX_API_URL+"/part/get", headers=headers, json=data)
+        data=response.json()["data"]
+
+        # Getting stock values per stock location
+        stock_status = {}
+        for item in data["part/stock"]:
+            # if storage location already exist, calcualte the stock level
+            if item["stock/storage-id"] in stock_status:
+                stock_status[item["stock/storage-id"]]+=item["stock/quantity"]
+            # else assing the value
+            else:
+                stock_status[item["stock/storage-id"]]=item["stock/quantity"]
+            #remove locations with 0 stock
+            if stock_status[item["stock/storage-id"]] == 0:
+                del stock_status[item["stock/storage-id"]]
+
+        # Looking up human readable name
+        stock_status_named = {}
+
+        for key, value in stock_status.items():
+            response = requests.post(PARTSBOX_API_URL+"/storage/get", headers=headers, json={"storage/id": key})
+            data_storage = response.json()
+
+            stock_status_named[data_storage["data"]["storage/name"]]=stock_status[key]
+
+        partsbox_fields = {}
+        partsbox_fields["mpn"]=data["part/name"]
+        partsbox_fields["desc"]=data["part/linked-choices"]["description"]
+        partsbox_fields["location"]=str(stock_status_named).replace("{","").replace("}","").replace("'","")
+        partsbox_fields["url"]="https://partsbox.com/irnas/part/"+part_id
+
+        return(partsbox_fields)
+
+    def _generate_partsbox_part(self,img):
         self._text
+
+        with open('partsbox-config.yaml') as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
 
         partsbox_fields = {}
         # Default values
@@ -301,7 +355,10 @@ class SimpleLabel:
         partsbox_fields["location"]="Placeholder LOCATION"
         partsbox_fields["url"]="https://PARTSBOX.COM/nonenoenoenoenoenoenoenoene"
 
-        if self._text is not ' ':
+        # Check by length if that is partsbox id
+        if len(self._text) == 26:
+            partsbox_fields=self._get_partsbox_data(config, self._text)
+        elif self._text is not ' ':
             lines=self._text.splitlines()
             try:
                 partsbox_fields["mpn"]=lines[0]
@@ -356,9 +413,8 @@ class SimpleLabel:
         text=textwrap.shorten(text, width=50, placeholder="...")
         self.write_text(img,(margin, bottom_row_offset), text, font_filename=font, font_size='fill', max_width=int(width-height*0.8), max_height=bottom_row_height, color=color)
 
-        text="irnas.eu"#self.label_company
+        text=config["PARTSBOX_COMPANY"]
         text=textwrap.shorten(text, width=50, placeholder="...")
-        #self.write_text_box(img,(int(width*0.7), bottom_row_offset+bottom_row_height/4), text, box_width=int(width*0.3), box_height=bottom_row_height/2, font_filename=font, font_size=10, color=color, place='center')
         self.write_text(img,(int(width*0.8), int(bottom_row_offset+bottom_row_height/4)), text, font_filename=font, font_size='fill', max_width=int(width-height*0.8), max_height=bottom_row_height/2, color=color)
 
         # QR code
@@ -378,15 +434,80 @@ class SimpleLabel:
         img.paste(qr_img,(width-w-20,int(height-h-bottom_row_height)))
 
         return img
+    
+    def _generate_partsbox_storage(self,img):
+        self._text
+
+        partsbox_fields = {}
+        # Default values
+        partsbox_fields["location"]="Placeholder LOCATION"
+        partsbox_fields["url"]="https://PARTSBOX.COM/nonenoenoenoenoenoenoenoene"
+
+        if self._text is not ' ':
+            lines=self._text.splitlines()
+            try:
+                partsbox_fields["location"]=lines[0]
+            except:
+                print("Fail")
+
+            try:
+                partsbox_fields["url"]=lines[1]
+            except:
+                print("Fail")
+
+        color = "black"
+        font=self._font_path
+        #font = 'Pillow/Tests/fonts/FreeSans.ttf'
+        width, height = self._width, self._height
+
+        print("width {} height{} ".format(width,height))
+
+        # top row height as percentage of total
+        margin=20
+        top_row_height=int(height*1)-margin
+
+        # Storage location
+        text=partsbox_fields["location"]
+        text=textwrap.shorten(text, width=50, placeholder="...")
+        self.write_text(img,(margin, 0), text, font_filename=font, font_size='fill', max_width=int(width-height*0.8), max_height=top_row_height, color=color)
+
+        text="irnas.eu"#self.label_company
+        text=textwrap.shorten(text, width=50, placeholder="...")
+        self.write_text(img,(int(width*0.8), int(0+top_row_height/4)), text, font_filename=font, font_size='fill', max_width=int(width-height*0.8), max_height=top_row_height/2, color=color)
+
+        # QR code
+        qr = QRCode(
+            version=1,
+            error_correction=constants.ERROR_CORRECT_L,
+            box_size=5,
+            border=0,
+        )
+        qr.add_data(partsbox_fields["url"].lower())
+        qr.make(fit=True)
+        qr_img = qr.make_image(
+            fill_color='red' if (255, 0, 0) == self._fore_color else 'black',
+            back_color="white")
+
+        w, h = qr_img.size
+        img.paste(qr_img,(width-w-20,int(height-h)))
+
+        return img
 
     def generate(self):
 
         if self._label_content in (LabelContent.PARTSBOX_STORAGE, LabelContent.PARTSBOX_PART):
-            width, height = (696, int(696*0.4))
-            self._width, self._height = width, height 
+            if self._label_content is LabelContent.PARTSBOX_PART :
+                width, height = (696, int(696*0.4))
+                self._width, self._height = width, height 
 
-            imgResult = Image.new('RGB', (width, height), 'white')
-            self._generate_partsbox(imgResult)
+                imgResult = Image.new('RGB', (width, height), 'white')
+                self._generate_partsbox_part(imgResult)
+            elif self._label_content is LabelContent.PARTSBOX_STORAGE :
+                width, height = (696, int(696*0.3))
+                self._width, self._height = width, height 
+
+                imgResult = Image.new('RGB', (width, height), 'white')
+                self._generate_partsbox_storage(imgResult)
 
         else:
             if self._label_content in (LabelContent.QRCODE_ONLY, LabelContent.TEXT_QRCODE):

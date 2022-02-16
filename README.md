@@ -1,6 +1,6 @@
 ## brother\_ql\_web\partsbox
 
-This is a web service to print labels in particula to use with [PartsBox](http://partsbox.com) Service on on Brother QL label printers. N0te: Higly experimental implementation presently with proof-of-code implementation - needs rework to support and validate most edge-cases.
+This is a web service to print labels in particula to use with [PartsBox](http://partsbox.com) Service on on Brother QL label printers. Note: Higly experimental implementation presently with proof-of-code implementation - needs rework to support and validate most edge-cases.
 
 You need Python 3 for this software to work.
 
@@ -9,9 +9,11 @@ You need Python 3 for this software to work.
 The web interface is [responsive](https://en.wikipedia.org/wiki/Responsive_web_design).
 
 ### PartsBox features
-PartsBox is a web service for tracking components and as such it is useful to print labels that attach to physical objects. As no API is available presently, the label printing only has a built it format which uses copy-paste data to the label text.
+PartsBox is a web service for tracking components and as such it is useful to print labels that attach to physical objects. There is a beta Partsbox API which gives software access to the data based on ID anything or using a manual copy-paste data to the label text.
 
-Parts tab uses the label text field as a 4 line entry where the lines get used as follows:
+Option A: Parts tab expects a 26 character ID anything code, which will then automatically fetch details.
+
+Option B: Parts tab uses the label text field as a 4 line entry where the lines get used as follows:
 1. Manufacturer part number (large on top)
 1. Part description (multi line in middle
 1. Storage location (bottom)
@@ -36,6 +38,16 @@ Build the venv and install the requirements:
     source /opt/brother_ql_web/.venv/bin/activate
     pip install -r requirements.txt
 
+### Development
+In development process, it is useful to give permissions to the printer from the user account:
+
+'''
+sudo chown -R USER:USER /dev/usb/lp0
+
+for example:
+sudo chown -R musti:musti /dev/usb/lp3 
+'''
+
 ### Configuration file
 
 Create a directory called 'instance', a file called 'application.py' and adjust the values to match your needs.
@@ -50,6 +62,13 @@ E.g.
     import logging
     PRINTER_MODEL = 'QL-820NWB'
     PRINTER_PRINTER = 'tcp://192.168.1.33:9100'
+
+Second configuration file is partsbox-config.yaml, where API key must be added as well as the user space url and the key. Company is written under the QR code. Below is an example of how config file should look. Copy partsbox-config.yaml.default to partsbox-config.yaml and enter your values.
+
+    PARTSBOX_USER_URL: "https://partsbox.com/irnas"
+    PARTSBOX_API_URL: "https://api.partsbox.com/api/1"
+    PARTSBOX_API_KEY: 'partsboxapi_arbbevr3hwgjpbf1w6nnga2hds0aaaaaaa3a99e31c2d259c11bd5055f4aaaaaa'
+    PARTSBOX_COMPANY: "irnas.eu"
 
 ### Startup
 
